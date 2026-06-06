@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Proposal: Atlassian Operations Agent</title>
+<style>
+:root {
+  --asu-maroon: #8C1D40;
+  --asu-gold: #FFC627;
+  --asu-black: #000000;
+  --asu-white: #FFFFFF;
+  --asu-green: #78BE20;
+  --asu-blue: #00A3E0;
+  --gray-1: #191919;
+  --gray-2: #484848;
+  --gray-3: #747474;
+  --gray-4: #BFBFBF;
+  --gray-5: #D0D0D0;
+  --gray-6: #E8E8E8;
+  --gray-7: #FAFAFA;
+  --font-stack: Arial, Helvetica, "Nimbus Sans L", "Liberation Sans", FreeSans, sans-serif;
+  --font-mono: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", Menlo, Consolas, monospace;
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  --max-width: 54rem;
+  --radius: 4px;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; font-family: var(--font-stack); font-size: 15px; line-height: 1.6; color: var(--gray-1); background: var(--asu-white); -webkit-font-smoothing: antialiased; }
+.page { max-width: var(--max-width); margin: 0 auto; padding: var(--space-2xl) var(--space-xl); }
+h1, h2, h3 { font-weight: 700; line-height: 1.25; margin: var(--space-lg) 0 var(--space-sm); }
+h1 { font-size: 1.75rem; color: var(--asu-maroon); border-bottom: 3px solid var(--asu-gold); padding-bottom: var(--space-sm); }
+h2 { font-size: 1.25rem; color: var(--gray-1); margin-top: var(--space-2xl); }
+h3 { font-size: 1rem; color: var(--gray-2); }
+.subtitle { color: var(--gray-3); font-size: 0.9rem; margin-top: var(--space-xs); }
+.highlight-box { background: var(--gray-7); border-left: 4px solid var(--asu-maroon); padding: var(--space-md) var(--space-lg); margin: var(--space-lg) 0; border-radius: 0 var(--radius) var(--radius) 0; }
+.highlight-box p { margin: var(--space-xs) 0; }
+.gold-box { background: #fffdf0; border-left: 4px solid var(--asu-gold); padding: var(--space-md) var(--space-lg); margin: var(--space-lg) 0; border-radius: 0 var(--radius) var(--radius) 0; }
+.gold-box p { margin: var(--space-xs) 0; }
+table { width: 100%; border-collapse: collapse; font-size: 0.875rem; margin: var(--space-md) 0; }
+th, td { text-align: left; padding: var(--space-sm) var(--space-md); border-bottom: 1px solid var(--gray-6); }
+th { font-weight: 700; background: var(--gray-7); color: var(--gray-2); }
+code { font-family: var(--font-mono); font-size: 0.85em; background: var(--gray-7); padding: 0.1em 0.3em; border-radius: 3px; }
+pre { background: var(--gray-7); border: 1px solid var(--gray-6); border-radius: var(--radius); padding: var(--space-md); overflow-x: auto; font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.5; }
+.capability-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); margin: var(--space-lg) 0; }
+.capability-card { border: 1px solid var(--gray-6); border-radius: var(--radius); padding: var(--space-md); }
+.capability-card.primary { border-color: var(--asu-maroon); border-width: 2px; }
+.capability-card h3 { margin-top: 0; }
+.capability-card p { margin: var(--space-xs) 0; font-size: 0.9rem; color: var(--gray-2); }
+.capability-card .status { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+.status-first { color: var(--asu-maroon); }
+.status-future { color: var(--gray-3); }
+.convo-block { background: var(--gray-7); border-radius: var(--radius); padding: var(--space-md) var(--space-lg); margin: var(--space-md) 0; font-size: 0.9rem; }
+.convo-block .human { color: var(--asu-maroon); font-weight: 600; }
+.convo-block .agent { color: var(--gray-2); }
+.convo-block .action { color: var(--asu-green); font-style: italic; font-size: 0.85rem; }
+.convo-line { margin: var(--space-sm) 0; }
+.tag { display: inline-block; padding: 0.1em 0.5em; border-radius: var(--radius); font-size: 0.75rem; font-weight: 600; }
+.tag-atl { background: var(--asu-blue); color: white; }
+.tag-eng { background: var(--asu-maroon); color: white; }
+.tag-shared { background: var(--asu-gold); color: var(--gray-1); }
+.section-divider { border: none; border-top: 1px solid var(--gray-6); margin: var(--space-2xl) 0; }
+.footer { margin-top: var(--space-2xl); padding-top: var(--space-md); border-top: 1px solid var(--gray-6); font-size: 0.8rem; color: var(--gray-3); }
+@media (max-width: 600px) { .capability-grid { grid-template-columns: 1fr; } .page { padding: var(--space-lg) var(--space-md); } }
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>Proposal: Atlassian Operations Agent</h1>
+<p class="subtitle">An AI-powered assistant for the Atlassian team's daily operations</p>
+
+<div class="highlight-box">
+<p><strong>TL;DR:</strong> We propose building an AI agent that works alongside the Atlassian analysts — answering questions, executing routine tasks, auditing configurations, and automating repetitive workflows. The first capability shipped would be determined by the team based on what delivers the most value. The agent grows additional capabilities over time based on what you find most useful.</p>
+</div>
+
+<h2>The Vision</h2>
+
+<p>The Atlassian team manages hundreds of projects, spaces, and user configurations across the enterprise. Much of this work is repetitive, well-defined, and follows documented standards — making it ideal for an agent-assisted workflow.</p>
+
+<p>Rather than building a rigid CLI tool that does one thing, we're proposing a <strong>conversational agent</strong> that understands your domain and grows with your needs.</p>
+
+<h2>Proposed Capabilities — Start Small, Grow Over Time</h2>
+
+<div class="capability-grid">
+<div class="capability-card">
+<span class="status status-future">○ Candidate</span>
+<h3>User &amp; Permission Management</h3>
+<p>Add/remove users, grant project &amp; space access, deactivate departing users, review admin lists, identify over-permissioned accounts. <em>(Highest-volume request type — 42 tickets in 6 months.)</em></p>
+</div>
+<div class="capability-card">
+<span class="status status-future">○ Candidate</span>
+<h3>Auditing & Hygiene</h3>
+<p>Find Confluence spaces missing UPRD pages, projects with inconsistent naming, orphaned spaces, stale projects with no recent activity.</p>
+</div>
+<div class="capability-card">
+<span class="status status-future">○ Candidate</span>
+<h3>Standards & Knowledge</h3>
+<p>Answer questions about conventions, lookup who owns a project, explain what fields are required for a UPRD, find the product code for a given team.</p>
+</div>
+<div class="capability-card">
+<span class="status status-future">○ Candidate</span>
+<h3>Reporting</h3>
+<p>Generate summaries — active projects per family, spaces by last-updated date, ticket volume trends, onboarding metrics.</p>
+</div>
+<div class="capability-card">
+<span class="status status-future">○ Candidate</span>
+<h3>Configuration Changes</h3>
+<p>Update workflows, modify notification schemes, add issue types — guided by the agent with confirmation before execution.</p>
+</div>
+<div class="capability-card">
+<span class="status status-future">○ Candidate</span>
+<h3>Product Onboarding</h3>
+<p>Create Jira projects, Confluence spaces, and UPRD pages from a single conversation. Enforces naming conventions and required metadata automatically.</p>
+</div>
+</div>
+
+<div class="gold-box">
+<p><strong>Key principle:</strong> The team decides what ships first. The capabilities above are candidates, not a committed order. Our workload analysis (below) points to <strong>User Management</strong> as the highest-volume, most repetitive category — a strong candidate for the first capability — but the final call is yours. Whatever ships first, the agent's capabilities expand from there based on what the Atlassian analysts find most tedious or error-prone.</p>
+</div>
+
+<h2>How It Works (Technically)</h2>
+
+<p>The agent is built on <a href="https://kiro.dev">Kiro</a> — the same AI assistant platform already used across Engineering. It consists of:</p>
+
+<table>
+<tr><th>Component</th><th>What It Does</th><th>Analogy</th></tr>
+<tr>
+<td><strong>Agent config</strong></td>
+<td>Defines the agent's persona, scope, and guardrails</td>
+<td>Job description</td>
+</tr>
+<tr>
+<td><strong>Skills</strong></td>
+<td>Domain knowledge — naming conventions, UPRD template, required fields, workflow steps</td>
+<td>Runbook / SOPs</td>
+</tr>
+<tr>
+<td><strong>Knowledge bases</strong></td>
+<td>Indexed reference material the agent searches — product map, existing project inventory, team rosters, historical decisions</td>
+<td>Filing cabinet / institutional memory</td>
+</tr>
+<tr>
+<td><strong>Scripts</strong></td>
+<td>Thin Python scripts that make API calls to Jira and Confluence</td>
+<td>The hands that do the work</td>
+</tr>
+</table>
+
+<p>The agent reads the skills to know <em>what</em> to do and <em>how</em> to validate, then calls scripts to <em>execute</em>. It always confirms with the analyst before making changes.</p>
+
+<div class="gold-box">
+<p><strong>On Atlassian Rovo:</strong> Atlassian is developing Rovo — their own AI agent platform with native Jira/Confluence integration. As Rovo matures, we may replace this agent with Rovo, integrate it alongside Rovo, or continue using what we build here if the team finds it better meets their needs. This proposal is designed to deliver value now without waiting for Rovo's roadmap, and the skills and knowledge bases we create will be transferable regardless of the underlying platform.</p>
+</div>
+
+<h2>Operations &amp; Guardrails</h2>
+
+<table>
+<tr><th>Question</th><th>How It's Handled</th></tr>
+<tr>
+<td><strong>How do we keep it from touching production by accident?</strong></td>
+<td>Two layers. (1) The agent <strong>drafts every change and waits for explicit confirmation</strong> before any write — nothing is created, modified, or deleted without an analyst saying "go." (2) The agent inherits the permissions of whatever credential it runs under, so its blast radius is capped by that account's access. Destructive operations (delete project, remove space, bulk permission removal) can be disallowed outright in the agent's config so they're never even offered.</td>
+</tr>
+<tr>
+<td><strong>Does it log everything for audit?</strong></td>
+<td>Yes. Every action runs through the Jira/Confluence REST API, which records the acting account in each item's history — same audit trail as a human using the UI. On top of that, the agent keeps a local session transcript (what was asked, what it proposed, what was confirmed, what API calls ran). Because writes are confirm-before-execute, there's always a human in the approval chain.</td>
+</tr>
+<tr>
+<td><strong>Who can use it?</strong></td>
+<td>Access is gated entirely by credentials. The agent can only do what its connected account can do — so use is limited to whoever holds the service-account token (or runs it under their own Atlassian permissions). It is not a shared, always-on service; it runs for the person who launched it, with that person's (or the service account's) access.</td>
+</tr>
+<tr>
+<td><strong>Where does it run?</strong></td>
+<td>Locally — on the analyst's own machine, the same way Engineering runs Kiro today. There's no new server to stand up, no dedicated infrastructure, and no agent sitting in the cloud with standing access to your tenant. Credentials stay on the local machine.</td>
+</tr>
+<tr>
+<td><strong>Who pays for it?</strong></td>
+<td>The <strong>ESS team</strong> covers Kiro usage and the LLM token costs.</td>
+</tr>
+</table>
+
+<h2>Your Workload — What We See in ATL</h2>
+
+<p>We looked at the last 6 months of the ATL project (176 tickets, Dec 2025 – Jun 2026) to understand the team's actual workload and identify where automation delivers the most value. The team handles an average of <strong>29 tickets per month</strong>.</p>
+
+<h3>Volume by Request Type</h3>
+
+<table>
+<tr><th>Issue Type</th><th>Count</th><th>% of Total</th></tr>
+<tr><td>Task (includes Tempo Team Requests)</td><td>49</td><td>28%</td></tr>
+<tr><td>User Management Request</td><td>42</td><td>24%</td></tr>
+<tr><td>Templated Project Request (UPRD/USVC)</td><td>22</td><td>12%</td></tr>
+<tr><td>Change Request</td><td>8</td><td>5%</td></tr>
+<tr><td>PMO Project</td><td>5</td><td>3%</td></tr>
+<tr><td>Training</td><td>5</td><td>3%</td></tr>
+<tr><td>Bug</td><td>4</td><td>2%</td></tr>
+<tr><td>Other (New Feature, Email-to-Jira)</td><td>3</td><td>2%</td></tr>
+</table>
+
+<h3>What's Inside Each Category</h3>
+
+<table>
+<tr><th>Category</th><th>Breakdown</th></tr>
+<tr><td><strong>User Management (42)</strong></td><td>Add/grant access (~20), permission/role updates (~10), deactivate users (~6), reactivate/credential issues (~4), onboard student employees (~2)</td></tr>
+<tr><td><strong>Tasks (49)</strong></td><td>Tempo Team Requests (~28, auto-generated), archive/close/restore projects (~9), webhook/API config (~4), create boards/spaces (~4), transfer ownership/move work (~2), misc (~2)</td></tr>
+<tr><td><strong>Templated Project Requests (22)</strong></td><td>All follow identical format: <code>UPRD: {Name} (key: {code})</code>. Submitted in batches of 2-4 on the same day.</td></tr>
+</table>
+
+<div class="highlight-box">
+<p><strong>How the Tempo Team Request flow actually works:</strong> When any project request is created — a Templated Project Request (UPRD/USVC) <em>or</em> a PMO Project (PRJ) — Jira Automation automatically spawns a separate "Tempo Team Request" Task, linked to the parent via a "split to" relationship. That automation only creates the <em>ticket</em>; an analyst must then manually go into Tempo, create the team, and assign it to the sponsoring Portfolio Manager.</p>
+<p><strong>Implication for automation:</strong> The agent creating a project request will <em>not</em> stop these tickets from being generated — the automation fires off the parent regardless of who created it. The opportunity is the reverse: have the agent <em>fulfill</em> the Tempo Team Request (create the team, assign the Portfolio Manager) instead of just generating busywork. This depends on whether Tempo exposes an API the agent can call — an open question for the team.</p>
+</div>
+
+<h3>Patterns We Noticed</h3>
+
+<ul>
+<li><strong>User Management dominates the queue</strong> — 42 tickets in 6 months (~7/month). Add/remove/deactivate users, grant access, vendor partners, ServiceNow RITM fulfillment. Clear inputs, consistent steps every time.</li>
+<li><strong>Templated Project Requests are highly structured</strong> — 22 tickets (~4/month), same format every time, always paired with a Tempo Team Request, submitted in batches</li>
+<li><strong>Tempo Team Requests are auto-generated follow-on tickets</strong> — 28 of the 49 Task tickets. Each one is spawned by Jira Automation when a project request (UPRD/USVC/PRJ) is created, then <em>manually</em> fulfilled by an analyst. Automating the project request doesn't remove them — but the agent could fulfill them (see flow above).</li>
+<li><strong>Ad-hoc ops work is varied but small</strong> — archive/restore projects, create boards, move issues, set up webhooks (~3-4/month)</li>
+<li><strong>Change Requests are infrequent but span a wide range</strong> — from 35-minute field updates to multi-week custom configuration work (8 in 6 months)</li>
+</ul>
+
+<h3>Where Automation Fits</h3>
+
+<table>
+<tr><th>Rank</th><th>Category</th><th>Why It's a Good Fit</th></tr>
+<tr><td>1</td><td>User Management</td><td>Highest volume (42 in 6 months, ~7/month), simple inputs (user ID + project/space), repetitive</td></tr>
+<tr><td>2</td><td>Templated Project Requests</td><td>Highly structured, consistent pattern, 22 in 6 months (~4/month), always same inputs</td></tr>
+<tr><td>3</td><td>Tempo Team Requests</td><td>Auto-generated by Jira Automation off every project request, then fulfilled by hand — the agent could create the Tempo team and assign the Portfolio Manager (requires Tempo API access)</td></tr>
+<tr><td>4</td><td>Change Requests</td><td>Lower volume (8 in 6 months) but straightforward (field updates, permission toggles)</td></tr>
+</table>
+
+<p>This isn't prescriptive — you know your workload better than we do. But the data suggests these categories are where repetitive, well-defined work lives and where an agent could take the most off your plate.</p>
+
+<hr class="section-divider">
+
+<h2>What We're Asking</h2>
+
+<div class="highlight-box">
+<p>We'd like to partner with the Atlassian team to build this — starting with whatever capability you identify as the highest priority, and expanding from there.<strong> Your team has as much ownership and development involvement as you want.</strong> You can drive the whole thing, co-develop with engineering, or hand us requirements and review what we deliver. We'll match whatever model works best for your team's bandwidth and interests.</p>
+</div>
+
+<h3>Ownership is Flexible</h3>
+
+<table>
+<tr><th>Component</th><th>Who</th></tr>
+<tr><td>Agent persona & guardrails</td><td><span class="tag tag-shared">Collaborative</span> — you define what it should/shouldn't do</td></tr>
+<tr><td>Skills (naming conventions, templates, rules)</td><td><span class="tag tag-atl">Atlassian team</span> — you own the standards</td></tr>
+<tr><td>Scripts (API integration code)</td><td><span class="tag tag-eng">Engineering</span> — we build, you review</td></tr>
+<tr><td>API credentials & permissions</td><td><span class="tag tag-atl">Atlassian team</span> — you control access</td></tr>
+<tr><td>Day-to-day use</td><td><span class="tag tag-atl">Atlassian team</span> — it's your assistant</td></tr>
+<tr><td>Adding new capabilities over time</td><td><span class="tag tag-shared">Collaborative</span> — you identify needs, we help build</td></tr>
+</table>
+
+<h3>What we need to get started</h3>
+
+<ol>
+<li><strong>Feedback on this proposal</strong> — Does this resonate? What would you change?</li>
+<li><strong>30 minutes</strong> — to walk through your current standards (naming, templates, required fields) so we can encode them correctly</li>
+<li><strong>A pilot use case</strong> — one real, recurring task (e.g., a batch of user-access requests, or an upcoming onboarding) we can use as the first real test of whichever capability you pick</li>
+</ol>
+
+<hr class="section-divider">
+
+<h2>Appendix: Example Interactions</h2>
+
+<h3>User &amp; Permission Management</h3>
+<div class="convo-block">
+<div class="convo-line"><span class="human">Analyst:</span> Who has admin access to the DPL project?</div>
+<div class="convo-line"><span class="agent">Agent:</span> DPL project administrators: jsharper, nwilken, mcmathe1. Last permission change was 3 months ago when mcmathe1 was added.</div>
+</div>
+
+<h3>Auditing</h3>
+<div class="convo-block">
+<div class="convo-line"><span class="human">Analyst:</span> Which Confluence spaces are missing a UPRD page?</div>
+<div class="convo-line"><span class="agent">Agent:</span> I found 12 spaces that don't have a page starting with "UPRD:" — here's the list sorted by last activity. Want me to create stub UPRD pages for any of them?</div>
+</div>
+
+<h3>Standards & Knowledge</h3>
+<div class="convo-block">
+<div class="convo-line"><span class="human">Analyst:</span> What's the naming convention for Confluence spaces?</div>
+<div class="convo-line"><span class="agent">Agent:</span> Space key should be the product code (uppercase, e.g., IRS). Space name should be "UPRD: {Full Product Name}". The space should contain a UPRD page as its homepage with all standard sections filled in.</div>
+</div>
+
+<h3>Product Onboarding</h3>
+<div class="convo-block">
+<div class="convo-line"><span class="human">Analyst:</span> I need to set up a new product called "Fraud Watchdog" under Identity Services. Product code is FROG, tech contact is ccumaran.</div>
+<div class="convo-line"><span class="agent">Agent:</span> I'll create the following — let me confirm before proceeding:</div>
+<div class="convo-line"><span class="agent">• Jira project: FROG (Scrum, lead: ccumaran)</span></div>
+<div class="convo-line"><span class="agent">• Confluence space: FROG ("UPRD: Fraud Watchdog") with standard UPRD template</span></div>
+<div class="convo-line"><span class="agent">Who should be the admin contact?</span></div>
+<div class="convo-line"><span class="human">Analyst:</span> Admin is nwilken.</div>
+<div class="convo-line"><span class="action">✓ Created Jira project FROG</span></div>
+<div class="convo-line"><span class="action">✓ Created Confluence space FROG with UPRD page</span></div>
+</div>
+
+<div class="footer">Generated 2026-06-06 &middot; Atlassian Operations Agent Proposal<br>Created by Kasey Kautenburger and Kiro</div>
+
+</div>
+</body>
+</html>
