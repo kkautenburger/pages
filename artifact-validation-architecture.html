@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EVA — Artifact Validation Engine</title>
+<style>
+:root {
+  --asu-maroon: #8C1D40;
+  --asu-maroon-dark: #6B1530;
+  --asu-gold: #FFC627;
+  --asu-gold-soft: #FFF8E1;
+  --asu-white: #FFFFFF;
+  --asu-green: #78BE20;
+  --asu-blue: #00A3E0;
+  --gray-1: #191919;
+  --gray-2: #484848;
+  --gray-3: #747474;
+  --gray-4: #BFBFBF;
+  --gray-5: #D0D0D0;
+  --gray-6: #E8E8E8;
+  --gray-7: #FAFAFA;
+  --font-stack: Arial, Helvetica, "Nimbus Sans L", "Liberation Sans", FreeSans, sans-serif;
+  --font-mono: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", Menlo, Consolas, monospace;
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  --space-3xl: 4.5rem;
+  --max-width: 68rem;
+  --sidebar-width: 13rem;
+  --radius: 6px;
+  --radius-lg: 12px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+}
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; font-family: var(--font-stack); font-size: 15px; line-height: 1.7; color: var(--gray-1); background: var(--gray-7); -webkit-font-smoothing: antialiased; }
+
+@keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+section { animation: fadeUp 0.4s ease-out both; }
+section:nth-child(2) { animation-delay: 0.05s; }
+section:nth-child(3) { animation-delay: 0.1s; }
+section:nth-child(4) { animation-delay: 0.15s; }
+
+.page { display: grid; grid-template-columns: var(--sidebar-width) 1fr; max-width: var(--max-width); margin: 0 auto; gap: var(--space-2xl); padding: var(--space-xl); }
+@media (max-width: 800px) { .page { grid-template-columns: 1fr; padding: var(--space-md); } .sidebar { position: static; max-height: none; } }
+
+.sidebar { position: sticky; top: var(--space-xl); align-self: start; max-height: calc(100vh - 3rem); overflow-y: auto; }
+.sidebar-inner { background: var(--asu-white); border-radius: var(--radius-lg); padding: var(--space-lg); box-shadow: var(--shadow-sm); border: 1px solid var(--gray-6); }
+.sidebar-title { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--asu-maroon); margin-bottom: var(--space-md); }
+.sidebar a { display: block; padding: 0.35rem 0.6rem; margin: 0.15rem 0; color: var(--gray-3); text-decoration: none; font-size: 0.8rem; font-weight: 700; border-radius: var(--radius); transition: all 0.15s; }
+.sidebar a:hover { color: var(--asu-maroon); background: var(--asu-gold-soft); }
+
+.main { min-width: 0; }
+
+.hero { background: linear-gradient(135deg, var(--asu-maroon) 0%, var(--asu-maroon-dark) 100%); border-radius: var(--radius-lg); padding: var(--space-3xl) var(--space-2xl); margin-bottom: var(--space-2xl); position: relative; overflow: hidden; }
+.hero::before { content: ''; position: absolute; top: -50%; right: -20%; width: 60%; height: 200%; background: radial-gradient(ellipse, rgba(255,198,39,0.08) 0%, transparent 70%); pointer-events: none; }
+.hero h1 { font-size: 2.2rem; font-weight: 900; color: var(--asu-white); margin: 0 0 var(--space-sm); line-height: 1.1; }
+.hero .subtitle { font-size: 0.95rem; color: rgba(255,255,255,0.7); margin: 0; }
+.hero .product-badge { display: inline-block; margin-top: var(--space-lg); padding: 0.3em 0.8em; background: var(--asu-gold); color: var(--gray-1); font-family: var(--font-mono); font-size: 0.75rem; font-weight: 700; border-radius: var(--radius); }
+
+h2 { font-size: 1.4rem; font-weight: 900; color: var(--gray-1); margin: var(--space-2xl) 0 var(--space-lg); padding-bottom: var(--space-sm); border-bottom: 3px solid var(--asu-gold); }
+h3 { font-size: 1rem; font-weight: 700; color: var(--gray-2); margin: var(--space-xl) 0 var(--space-sm); }
+
+.card { background: var(--asu-white); border-radius: var(--radius-lg); padding: var(--space-xl); margin: var(--space-lg) 0; box-shadow: var(--shadow-sm); border: 1px solid var(--gray-6); }
+
+.constraints { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin: var(--space-lg) 0; }
+.constraint { padding: 0.5em 1em; background: var(--asu-white); border: 1px solid var(--gray-6); border-radius: 2rem; font-size: 0.8rem; box-shadow: var(--shadow-sm); }
+.constraint strong { color: var(--asu-maroon); }
+
+table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: var(--space-md) 0; background: var(--asu-white); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm); }
+th, td { text-align: left; padding: 0.75rem 1rem; border-bottom: 1px solid var(--gray-6); }
+th { font-weight: 700; background: var(--gray-1); color: var(--asu-white); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+a { color: var(--asu-maroon); }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--asu-gold-soft); }
+
+code, pre { font-family: var(--font-mono); font-size: 0.82em; }
+pre { background: var(--gray-1); color: #e8e8e8; border-radius: var(--radius); padding: var(--space-lg); overflow-x: auto; line-height: 1.5; box-shadow: var(--shadow-md); }
+code { background: var(--gray-6); color: var(--asu-maroon); padding: 0.15em 0.4em; border-radius: 3px; font-weight: 700; }
+
+details { margin: var(--space-sm) 0; background: var(--asu-white); border: 1px solid var(--gray-6); border-radius: var(--radius); overflow: hidden; transition: box-shadow 0.2s; }
+details[open] { box-shadow: var(--shadow-sm); }
+details summary { cursor: pointer; font-weight: 700; padding: 0.75rem 1rem; font-size: 0.9rem; transition: background 0.15s; }
+details summary:hover { background: var(--asu-gold-soft); }
+details > :not(summary) { padding: 0 1rem 1rem; }
+
+.badge { display: inline-block; padding: 0.2em 0.6em; border-radius: var(--radius); font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.badge-blocking { background: var(--asu-maroon); color: var(--asu-white); }
+
+.flow-diagram { display: flex; flex-direction: column; align-items: center; gap: 0; margin: var(--space-xl) 0; padding: var(--space-xl); background: var(--asu-white); border-radius: var(--radius-lg); border: 1px solid var(--gray-6); box-shadow: var(--shadow-sm); }
+.flow-node { padding: 0.6rem 1.4rem; border-radius: var(--radius); font-weight: 700; font-size: 0.82rem; text-align: center; min-width: 240px; position: relative; cursor: pointer; transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s; }
+.flow-node:hover { transform: scale(1.04); box-shadow: var(--shadow-lg); }
+.flow-node.aws { background: #232F3E; color: var(--asu-white); }
+.flow-node.external { background: var(--gray-2); color: var(--asu-white); }
+.flow-node.compute { background: var(--asu-maroon); color: var(--asu-white); }
+.flow-node.storage { background: var(--asu-blue); color: var(--asu-white); }
+.flow-node.ai { background: linear-gradient(135deg, #FF9900, #FFB84D); color: var(--gray-1); }
+.flow-arrow { width: 2px; height: 20px; background: linear-gradient(to bottom, var(--gray-4), var(--gray-5)); position: relative; }
+.flow-arrow::after { content: '\25BE'; position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%); color: var(--gray-4); font-size: 12px; }
+.flow-label { font-size: 0.68rem; color: var(--gray-3); margin: 2px 0; }
+.flow-split { display: flex; gap: var(--space-sm); align-items: center; }
+.flow-branch-left { display: flex; flex-direction: column; align-items: center; gap: 0; }
+.tooltip { display: none; position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--gray-1); color: var(--asu-white); padding: 0.5rem 0.8rem; border-radius: var(--radius); font-size: 0.72rem; font-weight: 400; white-space: nowrap; z-index: 10; pointer-events: none; box-shadow: var(--shadow-lg); }
+.tooltip::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: var(--gray-1); }
+.flow-node:hover .tooltip { display: block; animation: fadeUp 0.15s ease-out; }
+
+.tree { font-family: var(--font-mono); font-size: 0.78rem; line-height: 1.7; background: var(--gray-1); color: #ccc; padding: var(--space-lg); border-radius: var(--radius); white-space: pre; box-shadow: var(--shadow-md); overflow-x: auto; }
+.tree .dir { color: var(--asu-gold); font-weight: 700; }
+.tree .file { color: #aaa; }
+.tree .comment { color: #666; font-style: italic; }
+
+.footer { margin-top: var(--space-3xl); padding-top: var(--space-lg); border-top: 3px solid var(--asu-gold); font-size: 0.72rem; color: var(--gray-3); text-align: center; }
+</style>
+</head>
+<body>
+<div class="page">
+  <nav class="sidebar">
+    <div class="sidebar-inner">
+      <a href="#overview">1. Overview</a>
+      <a href="#scope">2. Scope &amp; Non-Goals</a>
+      <a href="#components">3. Components</a>
+      <a href="#flow">4. Execution Flow</a>
+      <a href="#python">5. Python Standards</a>
+      <a href="#resilience">6. Resilience</a>
+      <a href="#observability">7. Observability</a>
+      <a href="#security">8. Security</a>
+      <a href="#repo">9. Repository</a>
+      <a href="#testing">10. Testing</a>
+      <a href="#references">11. Reference</a>
+      <a href="#next">12. Next Steps</a>
+    </div>
+  </nav>
+
+  <main class="main">
+    <div class="hero">
+      <h1>Artifact Validation Engine</h1>
+      <p class="subtitle">MVP Architecture Handoff — Serverless document validation via Bedrock Data Automation</p>
+      <span class="product-badge">product: eva</span>
+    </div>
+
+    <section id="overview">
+      <h2>1. Project Overview</h2>
+      <p>Asynchronously validates document artifacts (e.g., verifying if an uploaded image is a valid SSN card) submitted via Kuali forms.</p>
+      <div class="constraints">
+        <span class="constraint"><strong>Volume:</strong> 10s-100s forms/day</span>
+        <span class="constraint"><strong>Perf:</strong> Near real-time (async)</span>
+        <span class="constraint"><strong>Security:</strong> PII — purge immediately</span>
+        <span class="constraint"><strong>Infra:</strong> AWS Serverless + OpenTofu</span>
+        <span class="constraint"><strong>Lang:</strong> Python 3.13+ / ty strict / Powertools</span>
+      </div>
+    </section>
+
+    <section id="scope">
+      <h2>2. Scope &amp; Non-Goals</h2>
+      <p>These are deliberate non-goals for the MVP, not oversights. Each is an accepted tradeoff to revisit as volume and requirements grow — don't build these unless a requirement forces it.</p>
+      <table>
+        <tr><th>Non-goal</th><th>Why it's acceptable for MVP</th></tr>
+        <tr><td>No idempotency layer</td><td>SQS is at-least-once, so an artifact may be validated and a result re-emitted more than once. Accepted — staging/purge is repeatable and downstream tolerates duplicate result events.</td></tr>
+        <tr><td>No reserved concurrency</td><td>Runs on default account concurrency. Volume is 10s–100s/day; revisit if throttling appears or volume grows.</td></tr>
+        <tr><td>Async only — no synchronous API</td><td>Validation is fire-and-forget via EEL. There is no request/response endpoint that returns a result inline.</td></tr>
+        <tr><td>15-min Lambda timeout is the hard ceiling</td><td>A single artifact must validate within one invocation. No Step Functions or long-running orchestration in MVP.</td></tr>
+        <tr><td>Event Translator extraction is a separate workstream</td><td>EVA consumes from EEL. Do <strong>not</strong> build the translator inside this repo — it is its own product (see <a href="#components">Components</a>).</td></tr>
+        <tr><td>EVA is not a system of record</td><td>It emits a result event and forgets. Persisting validation results is the downstream consumer's responsibility.</td></tr>
+        <tr><td>No DLQ auto-redrive</td><td>Failed events sit in the DLQ for manual inspection/replay. No automated reprocessing in MVP.</td></tr>
+        <tr><td>Single region, no DR</td><td>Deployed to <code>us-west-2</code> only. No multi-region or disaster-recovery failover.</td></tr>
+      </table>
+    </section>
+
+    <section id="components">
+      <h2>3. Architecture Components</h2>
+      <table>
+        <tr><th>Component</th><th>Service</th><th>Role</th></tr>
+        <tr><td>Ingestion</td><td>Kuali</td><td>User frontend. 5-10 MB file size limit.</td></tr>
+        <tr><td>Event Translator</td><td>Lambda Function URL</td><td>Authenticated Kuali submissions (ServiceAuth JWT, JWKS-validated), normalizes, publishes to EEL. Currently embedded in <code>wflow-sap</code> (<code>kuali-event-publisher</code>) → <strong>extract into its own product</strong> as a generic authenticated HTTP-to-EEL ingress for any system that can't call EventBridge directly.</td></tr>
+        <tr><td>Event Router</td><td>EEL (Enterprise Event Lake)</td><td>Routes form submissions to SQS; receives final result event.</td></tr>
+        <tr><td>Ingestion Queue</td><td>SQS</td><td>Buffers events, retry + backoff, routes failures to DLQ.</td></tr>
+        <tr><td>Compute</td><td>Lambda</td><td>Core orchestration. SQS ESM trigger. Python 3.13, 15 min timeout.</td></tr>
+        <tr><td>Transient Storage</td><td>S3</td><td>Staging for BDA. Encrypted, HTTPS-only, 1-day lifecycle purge.</td></tr>
+        <tr><td>AI Validation</td><td>Bedrock Data Automation</td><td>Validates artifact content.</td></tr>
+        <tr><td>Dead Letter Queue</td><td>SQS</td><td>Catches failed events after retries exhausted.</td></tr>
+        <tr><td>Checklist Update</td><td>Integration Broker (PeopleSoft)</td><td>Updates student checklist item to "Returned" on validation failure. Basic auth, XML over REST.</td></tr>
+        <tr><td>Student Notification</td><td>Salesforce (SFDC via ServiceAuth)</td><td>Creates a closed CAR case on validation failure → triggers auto-response email to student.</td></tr>
+        <tr><td>Team Notification</td><td>Slack (Webhook + Block Kit)</td><td>Posts validation outcome to team channel. Fire-and-forget.</td></tr>
+        <tr><td>Observability</td><td>CloudWatch + Datadog</td><td>Logs in CW, alerting/dashboards in Datadog → <code>#prd-eva</code></td></tr>
+      </table>
+    </section>
+
+    <section id="flow">
+      <h2>4. Execution Flow</h2>
+      <p style="font-size:0.85rem; color: var(--gray-3);">Hover nodes for details.</p>
+      <div class="flow-diagram">
+        <div class="flow-node external">Kuali Form Submission<span class="tooltip">User uploads artifact via Kuali form (5–10 MB limit)</span></div>
+        <div class="flow-arrow"></div>
+        <div class="flow-label">ServiceAuth JWT</div>
+        <div class="flow-node compute">Event Translator<span class="tooltip">Lambda Function URL. Validates JWT scope via JWKS, normalizes, publishes to EEL.</span></div>
+        <div class="flow-arrow"></div>
+        <div class="flow-label">publish event</div>
+        <div class="flow-node aws">EEL<span class="tooltip">Routes form submission event to SQS queue</span></div>
+        <div class="flow-arrow"></div>
+        <div class="flow-node aws">EVA SQS<span class="tooltip">Buffers events, retry with backoff. DLQ on exhaustion.</span></div>
+        <div class="flow-arrow"></div>
+        <div class="flow-label">event source mapping</div>
+        <div class="flow-node compute">EVA Lambda<span class="tooltip">See steps below for internal orchestration detail</span></div>
+        <div class="flow-arrow"></div>
+        <div class="flow-label">emit result (always)</div>
+        <div class="flow-node aws">EEL<span class="tooltip">Result event: form_id, document_type, source, isValidArtifact. Downstream consumers filter by source.</span></div>
+        <div class="flow-arrow"></div>
+        <div class="flow-label">on failure only</div>
+        <div class="flow-node external">Integration Broker<span class="tooltip">Update checklist item FPKGEX/FMM40 → action "R" (Returned). Basic auth, XML/REST.</span></div>
+        <div class="flow-arrow"></div>
+        <div class="flow-label">on failure only</div>
+        <div class="flow-node external">Salesforce (SFDC)<span class="tooltip">Create closed CAR case via ServiceAuth. Triggers auto-response email to student.</span></div>
+        <div class="flow-arrow"></div>
+        <div class="flow-label">always (fire-and-forget)</div>
+        <div class="flow-node external">Slack<span class="tooltip">Block Kit message via webhook URL. Pass/fail outcome + form_id. Non-blocking.</span></div>
+      </div>
+
+      <h3>EVA Lambda Orchestrator Steps in Detail</h3>
+      <ol>
+        <li><strong>Validate Input:</strong> Pydantic model via Powertools <code>event_parser</code>. Reject malformed immediately.</li>
+        <li><strong>Retrieval:</strong> <code>httpx</code> to <a href="https://developers.kualibuild.com/pull-push-attachments">Kuali GraphQL API</a> to retrieve form attachments (connect: 5s, read: 30s). Also extracts <code>emplid</code> and attempts to resolve <code>document_type</code> from the response metadata.</li>
+        <li><strong>Staging:</strong> S3 put. Key: <code>{form_id}/{uuid}</code>.</li>
+        <li><strong>Validation:</strong> BDA invocation with S3 URI.</li>
+        <li><strong>Immediate Purge:</strong> S3 delete the <em>instant</em> the result is received — the artifact is PII and must not linger. The <a href="#resilience">1-day S3 lifecycle rule</a> is the backstop, not the primary mechanism.</li>
+        <li><strong>Emit Result:</strong> EEL event with <code>form_id</code>, <code>document_type</code>, <code>source</code>, <code>isValidArtifact</code> boolean. Scoped subscriptions via <code>source</code>. <em>Always fires (pass and fail).</em></li>
+        <li><strong>IB Checklist Update (failure only):</strong> On validation failure, call Integration Broker to return the checklist item. <code>get_checklists(emplid, "FPKGEX", "FMM40")</code> → resolve <code>seq3c</code> → <code>update_checklist_item(action="R")</code>. Must-succeed — failure raises and retries via SQS.</li>
+        <li><strong>SFDC Create Closed Case (failure only):</strong> On validation failure, look up SFDC contact via <code>get_contact_id(emplid)</code>, then create a closed CAR case. Triggers auto-response email to the student notifying them their document was returned. Must-succeed.</li>
+        <li><strong>Slack Notification (always):</strong> Post Block Kit message to webhook URL with validation outcome (pass/fail, form_id, document_type). Fire-and-forget — log warning on failure, do not block or retry. <em>Consider dialing back to failures-only in future.</em></li>
+      </ol>
+
+      <h3>Conditional Execution Matrix</h3>
+      <table>
+        <tr><th>Step</th><th>Pass</th><th>Fail</th><th>Failure Semantics</th></tr>
+        <tr><td>EEL emit</td><td>✓</td><td>✓</td><td>Must-succeed (raises → SQS retry)</td></tr>
+        <tr><td>IB checklist update</td><td>—</td><td>✓</td><td>Must-succeed (idempotent on retry)</td></tr>
+        <tr><td>SFDC closed case</td><td>—</td><td>✓</td><td>Must-succeed (ordering prevents duplicates)</td></tr>
+        <tr><td>Slack notification</td><td>✓</td><td>✓</td><td>Fire-and-forget (warning on failure)</td></tr>
+      </table>
+      <p style="font-size:0.82rem; color:var(--gray-3);"><strong>Ordering rationale:</strong> EEL → IB → SFDC → Slack. IB is idempotent on retry. SFDC executes <em>after</em> IB succeeds, so on retry (IB success → SFDC failure → SQS redelivery) IB re-executes harmlessly and SFDC only fires once. Slack is last and non-blocking.</p>
+
+      <h3>Document Type Resolution</h3>
+      <p>The <code>document_type</code> field identifies what artifact was validated (e.g., SSN card, driver's license). Resolution strategy:</p>
+      <ol>
+        <li><strong>Primary:</strong> Infer from the Kuali GraphQL API response during the retrieval step (field labels, attachment categories, or form metadata).</li>
+        <li><strong>Fallback:</strong> Static config mapping (<code>form_id → document_type</code>) if the GraphQL response does not carry usable metadata. Requires a deploy to add new form types.</li>
+      </ol>
+    </section>
+
+    <section id="python">
+      <h2>5. Python Implementation Standards</h2>
+      <details><summary>HTTP Clients — httpx + stamina</summary>
+<pre>import stamina
+import httpx
+
+KUALI_TIMEOUT = httpx.Timeout(connect=5, read=30)
+
+@stamina.retry(on=(httpx.TransportError, httpx.HTTPStatusError), attempts=3)
+def fetch_attachment(url: str, api_key: str) -> bytes:
+    response = httpx.get(
+        url,
+        timeout=KUALI_TIMEOUT,
+        headers={"Authorization": f"Bearer {api_key}"},
+    )
+    response.raise_for_status()
+    return response.content</pre>
+      </details>
+      <details><summary>Boto3 Client Configuration</summary>
+<pre>from botocore.config import Config
+
+BOTO_CONFIG = Config(
+    connect_timeout=5,
+    read_timeout=30,
+    retries={"max_attempts": 3, "mode": "adaptive"},
+)
+
+s3_client = boto3.client("s3", config=BOTO_CONFIG)
+bedrock_client = boto3.client("bedrock-runtime", config=BOTO_CONFIG)</pre>
+      </details>
+      <details><summary>Input Validation — Pydantic + Powertools</summary>
+<pre>from pydantic import BaseModel, Field
+
+class FormSubmissionEvent(BaseModel):
+    form_id: str = Field(min_length=1)
+    source: str = Field(min_length=1)
+    attachment_url: str = Field(pattern=r"^https://")
+    submission_timestamp: str</pre>
+      </details>
+      <details><summary>Error Handling</summary>
+<pre>try:
+    result = invoke_bedrock(s3_uri=staged_uri)
+except bedrock_client.exceptions.ThrottlingException as e:
+    logger.error("Bedrock throttled", extra={"form_id": form_id, "error": str(e)})
+    raise  # Let infrastructure retry handle it
+except bedrock_client.exceptions.ValidationException as e:
+    logger.error("Bedrock rejected input", extra={"form_id": form_id, "error": str(e)})
+    return ValidationResult(form_id=form_id, is_valid=False, error="invalid_input")</pre>
+      </details>
+      <details><summary>Structured Logging — Powertools Logger</summary>
+<pre>from aws_lambda_powertools import Logger
+
+logger = Logger(service="artifact-validation")
+
+@logger.inject_lambda_context
+def handler(event, context):
+    logger.append_keys(form_id=event["form_id"])
+    logger.info("processing_started")
+    logger.info("validation_complete", is_valid=result)</pre>
+      </details>
+      <details><summary>Tracing — Powertools Tracer</summary>
+<pre>from aws_lambda_powertools import Tracer
+
+tracer = Tracer(service="artifact-validation")
+
+@tracer.capture_method
+def fetch_attachment(url: str, api_key: str) -> bytes:
+    ...</pre>
+      </details>
+      <details><summary>Event Parsing — Powertools</summary>
+<pre>from aws_lambda_powertools.utilities.parser import event_parser
+from aws_lambda_powertools.utilities.typing import LambdaContext
+
+@event_parser(model=FormSubmissionEvent)
+def handler(event: FormSubmissionEvent, context: LambdaContext):
+    ...</pre>
+      </details>
+    </section>
+
+    <section id="resilience">
+      <h2>6. Resilience &amp; Error Handling</h2>
+      <table>
+        <tr><th>Layer</th><th>Mechanism</th><th>Details</th></tr>
+        <tr><td>In-code retries</td><td><code>stamina</code></td><td>3 attempts, exp backoff + jitter. Only transient (5xx, timeouts, throttling).</td></tr>
+        <tr><td>Infrastructure retries</td><td>SQS redelivery</td><td>Visibility timeout + maxReceiveCount → DLQ after exhaustion.</td></tr>
+        <tr><td>PII garbage collection</td><td>S3 lifecycle</td><td>1-day expiration. Defense-in-depth for crash-between-stage-and-purge.</td></tr>
+        <tr><td>Dead Letter Queue</td><td>SQS DLQ</td><td>Datadog monitor alerts sent to <code>#prd-eva</code> on depth > 0.</td></tr>
+        <tr><td>Bedrock throttling</td><td>boto3 adaptive</td><td>Built-in adaptive retry. Sustained throttling → DLQ path.</td></tr>
+      </table>
+    </section>
+
+    <section id="observability">
+      <h2>7. Observability</h2>
+      <div class="card">
+        <p><span class="badge badge-blocking">Standard</span> All alerting via <strong>Datadog monitors</strong> → <code>#prd-eva</code>. CloudWatch Metrics are the data source; Datadog queries via AWS integration.</p>
+        <h3 style="margin-top:var(--space-md);">Why Datadog over CloudWatch alarms</h3>
+        <ul style="margin-bottom:0;">
+          <li><strong>Unified alerting</strong> — infra, APM, and log alerts route through one system with consistent escalation policies.</li>
+          <li><strong>Richer conditions</strong> — anomaly, composite, and forecast monitors not available in CW alarms.</li>
+          <li><strong>Better routing</strong> — PagerDuty/Slack integration, on-call schedules, and escalation chains in one place.</li>
+          <li><strong>Correlation</strong> — alerts link directly to the relevant traces, logs, and dashboards in the same UI.</li>
+        </ul>
+      </div>
+      <h3>Monitors</h3>
+      <table>
+        <tr><th>Monitor</th><th>Query</th><th>Threshold</th></tr>
+        <tr><td>Lambda Error Rate</td><td><code>sum:aws.lambda.errors{functionname:artifact-validation}</code></td><td>> 3 in 5 min</td></tr>
+        <tr><td>Lambda Duration P95</td><td><code>p95:aws.lambda.duration{functionname:artifact-validation}</code></td><td>> 60,000 ms</td></tr>
+        <tr><td>DLQ Depth</td><td><code>max:aws.sqs.approximate_number_of_messages_visible{...dlq}</code></td><td>> 0</td></tr>
+        <tr><td>Lambda Throttles</td><td><code>sum:aws.lambda.throttles{functionname:artifact-validation}</code></td><td>> 0</td></tr>
+        <tr><td>Validation Failures</td><td><code>artifact_validation.failures</code> (custom)</td><td>Anomaly</td></tr>
+      </table>
+      <h3>Logs &amp; Dashboard</h3>
+      <ul>
+        <li>Logs in CloudWatch — Datadog alerts on patterns via AWS integration</li>
+        <li>JSON-structured: <code>form_id</code> + <code>aws_request_id</code> on every line</li>
+        <li>Dashboard: invocations, error rate, P50/P95/P99, DLQ, success ratio, BDA latency</li>
+      </ul>
+    </section>
+
+    <section id="security">
+      <h2>8. Security</h2>
+      <div class="card">
+        <h3 style="margin-top:0;">Data Protection</h3>
+        <ul>
+          <li>S3: SSE-S3 encryption + <code>aws:SecureTransport</code> (HTTPS only) + block all public access</li>
+          <li>No PII in logs — <code>form_id</code> only</li>
+          <li>1-day lifecycle rule as defense-in-depth</li>
+        </ul>
+        <h3>Secrets</h3>
+        <ul>
+          <li>Kuali API keys in Secrets Manager (rotation support)</li>
+          <li>Integration Broker password in Secrets Manager (Basic auth)</li>
+          <li>ServiceAuth client secret in Secrets Manager (for SFDC token acquisition)</li>
+          <li>Slack webhook URL in Secrets Manager</li>
+          <li>Validate at cold start — fail immediately if missing</li>
+          <li>Cache in memory for warm invocations</li>
+        </ul>
+        <h3>IAM</h3>
+        <p style="margin-bottom:0;">Principle of least privilege — scope to specific resource ARNs, actions, and conditions.</p>
+      </div>
+    </section>
+
+    <section id="repo">
+      <h2>9. Repository Structure</h2>
+      <div class="tree"><span class="dir">├── .github/</span>
+<span class="dir">├── .kiro/</span>
+<span class="dir">│   └── steering/</span>
+<span class="file">│       ├── product.md</span>
+<span class="file">│       ├── tech.md</span>
+<span class="file">│       └── structure.md</span>
+<span class="file">├── AGENTS.md</span>              <span class="comment"># Thin pointer — .kiro is primary</span>
+<span class="dir">├── lambda_functions/</span>
+<span class="dir">│   └── artifact_validation/</span>
+<span class="dir">│       ├── src/</span>
+<span class="dir">│       │   └── artifact_validation/</span>
+<span class="file">│       │       ├── __init__.py</span>
+<span class="file">│       │       ├── lambda_function.py</span>
+<span class="dir">│       │       └── models/</span>
+<span class="dir">│       ├── tests/</span>
+<span class="file">│       ├── pyproject.toml</span>
+<span class="file">│       └── .python-version</span>
+<span class="dir">├── terraform/</span>
+<span class="file">│   ├── main.tf</span>
+<span class="file">│   ├── variables.tf</span>
+<span class="file">│   ├── outputs.tf</span>
+<span class="file">│   ├── secrets.tf</span>
+<span class="dir">│   ├── modules/</span>
+<span class="dir">│   │   └── event-listener/</span>
+<span class="file">│   ├── module-event-listener-*.tf</span>
+<span class="file">│   ├── qa.tfvars</span>
+<span class="file">│   └── prod.tfvars</span>
+<span class="dir">├── scripts/</span>
+<span class="dir">├── specs/</span>
+<span class="dir">├── tests/</span>
+<span class="file">├── Makefile</span>
+<span class="file">├── Jenkinsfile</span>
+<span class="file">├── CODEOWNERS</span>
+<span class="file">├── pyproject.toml</span>
+<span class="file">└── uv.lock</span></div>
+    </section>
+
+    <section id="testing">
+      <h2>10. Testing Strategy</h2>
+      <table>
+        <tr><th>Layer</th><th>Tool</th><th>What to Test</th></tr>
+        <tr><td>Unit</td><td><code>pytest</code> + <code>moto</code> + <code>respx</code></td><td>Handler logic, Pydantic validation, S3 ops, error paths</td></tr>
+        <tr><td>Integration</td><td><code>pytest</code> + AWS sandbox</td><td>End-to-end Lambda invocation</td></tr>
+        <tr><td>Network safety</td><td><code>pytest-socket</code></td><td>Ensure unit tests never hit network</td></tr>
+      </table>
+      <h3>Key Scenarios</h3>
+      <ul>
+        <li>Valid event → validation passes → EEL emit + Slack only (no IB, no SFDC)</li>
+        <li>Valid event → validation fails → EEL emit → IB update → SFDC case → Slack</li>
+        <li>Malformed event → Pydantic rejects</li>
+        <li>Kuali timeout → stamina retries then raises</li>
+        <li>BDA throttle → boto3 adaptive handles</li>
+        <li>S3 delete fails → lifecycle guarantees purge</li>
+        <li>IB call fails → raises → SQS retry (SFDC/Slack never fire)</li>
+        <li>SFDC call fails → raises → SQS retry (IB is idempotent on re-execution)</li>
+        <li>Slack fails → warning logged, does not block or retry</li>
+      </ul>
+    </section>
+
+    <section id="references">
+      <h2>11. Reference Implementation Patterns</h2>
+      <p>This repo follows the same patterns EVA will use. Study it first.</p>
+      <h3><a href="https://github.com/ASU/sisapi-student-apis-email" style="color: var(--asu-maroon); font-weight: 700;">sisapi-student-apis-email</a></h3>
+      <table>
+        <tr><th>Pattern</th><th>Where to look</th></tr>
+        <tr><td>Lambda function structure</td><td><a href="https://github.com/ASU/sisapi-student-apis-email/tree/main/lambda_functions"><code>lambda_functions/</code></a></td></tr>
+        <tr><td>Lambda layers</td><td><a href="https://github.com/ASU/sisapi-student-apis-email/tree/main/lambda_layers"><code>lambda_layers/</code></a></td></tr>
+        <tr><td>Datadog monitors as IaC</td><td><a href="https://github.com/ASU/sisapi-student-apis-email/blob/main/terraform/modules/durable-api/datadog-monitors.tf"><code>terraform/modules/durable-api/datadog-monitors.tf</code></a></td></tr>
+        <tr><td>Terraform modules</td><td><a href="https://github.com/ASU/sisapi-student-apis-email/tree/main/terraform"><code>terraform/</code></a></td></tr>
+        <tr><td>Terraform mocks for testing</td><td><a href="https://github.com/ASU/sisapi-student-apis-email/tree/main/terraform-mock"><code>terraform-mock/</code></a></td></tr>
+        <tr><td>Jenkins-WFLOW CI/CD</td><td><a href="https://github.com/ASU/sisapi-student-apis-email/blob/main/Jenkinsfile"><code>Jenkinsfile</code></a></td></tr>
+        <tr><td>Makefile targets</td><td><a href="https://github.com/ASU/sisapi-student-apis-email/blob/main/Makefile"><code>Makefile</code></a></td></tr>
+        <tr><td>Pre-commit hooks</td><td><a href="https://github.com/ASU/sisapi-student-apis-email/blob/main/.pre-commit-config.yaml"><code>.pre-commit-config.yaml</code></a></td></tr>
+        <tr><td>Kiro steering files</td><td><a href="https://github.com/ASU/sisapi-student-apis-email/tree/main/.kiro"><code>.kiro/</code></a></td></tr>
+      </table>
+      <h3>No Internal Reference (Build from Docs)</h3>
+      <ul>
+        <li><strong>httpx + stamina</strong> — <a href="https://www.python-httpx.org/">httpx docs</a>, <a href="https://stamina.hynek.me/">stamina docs</a></li>
+        <li><strong>Bedrock Data Automation</strong> — <a href="https://docs.aws.amazon.com/bedrock/latest/userguide/bda.html">AWS BDA docs</a></li>
+      </ul>
+
+      <h3><a href="https://github.com/ASU/sisfa-peoplesoft-financial-aid-module-event-listeners" style="color: var(--asu-maroon); font-weight: 700;">sisfa-peoplesoft-financial-aid-module-event-listeners</a></h3>
+      <table>
+        <tr><th>Pattern</th><th>Where to look</th></tr>
+        <tr><td>Integration Broker client (checklist API)</td><td><a href="https://github.com/ASU/sisfa-peoplesoft-financial-aid-module-event-listeners/tree/main/lambda_functions/idv_update/src/idv_update/integration_broker"><code>integration_broker/</code></a></td></tr>
+        <tr><td>Slack webhook + Block Kit notifications</td><td><a href="https://github.com/ASU/sisfa-peoplesoft-financial-aid-module-event-listeners/tree/main/lambda_functions/idv_update/src/idv_update/slack_notifier"><code>slack_notifier/</code></a></td></tr>
+      </table>
+
+      <h3><a href="https://github.com/ASU/wflow-financial-aid-sap-forms-automation" style="color: var(--asu-maroon); font-weight: 700;">wflow-financial-aid-sap-forms-automation</a></h3>
+      <table>
+        <tr><th>Pattern</th><th>Where to look</th></tr>
+        <tr><td>Salesforce client (ServiceAuth + create closed case)</td><td><a href="https://github.com/ASU/wflow-financial-aid-sap-forms-automation/tree/main/lambdas/functions/decision-dispatcher/src/decision_dispatcher/salesforce"><code>salesforce/</code></a></td></tr>
+      </table>
+    </section>
+
+    <section id="next">
+      <h2>12. Next Steps</h2>
+      <ol>
+        <li>Request new AWS accounts for production and non-production — PR to <a href="https://github.com/ASU/ceng-aws-data-center-config" style="color: var(--asu-maroon); font-weight: 700;">ceng-aws-data-center-config</a>.</li>
+        <li>Create repository — PR to <a href="https://github.com/ASU/dot-github-org-management-config/blob/main/terraform/repos9.auto.tfvars" style="color: var(--asu-maroon); font-weight: 700;">dot-github-org-management-config/repos9.auto.tfvars</a>, then init from <a href="https://github.com/ASU/dot-devops-examples-terraform/tree/main#asu-terraform-template" style="color: var(--asu-maroon); font-weight: 700;">ASU/dot-devops-examples-terraform</a>.</li>
+        <li>Get Jenkins-WFLOW access — PR to <a href="https://github.com/ASU/dco-jenkins-pop/blob/0ec4e6d0c03426e257f0812dee9cb32ad8d01309/jenkins/prod.tfvars#L1445" style="color: var(--asu-maroon); font-weight: 700;">dco-jenkins-pop/prod.tfvars</a>.</li>
+        <li>Validate Kuali capabilities: file size limits, API rate limits, event schema.</li>
+        <li>Determine exact BDA endpoint/model and IAM requirements.</li>
+        <li>Scaffold project structure — implement via <a href="https://en.wikipedia.org/wiki/Test-driven_development"> TDD</a>. Use PR stacking to break work into reviewable increments.</li>
+        <li>Deploy to sandbox, validate with synthetic events before production. CI/CD via <a href="https://jenkins-wflow.devops.asu.edu/" style="color: var(--asu-maroon); font-weight: 700;">Jenkins-WFLOW</a>.</li>
+      </ol>
+    </section>
+
+    <div class="footer">Generated 2026-06-16 &middot; EVA (Artifact Validation Engine) &middot; MVP Architecture Handoff<br>Created by Kasey Kautenburger and Kiro</div>
+  </main>
+</div>
+</body>
+</html>
