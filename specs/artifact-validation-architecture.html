@@ -183,6 +183,9 @@ details > :not(summary) { padding: 0 1rem 1rem; }
         <tr><td>Transient Storage</td><td>S3</td><td>Staging for BDA. Encrypted, HTTPS-only, 1-day lifecycle purge.</td></tr>
         <tr><td>AI Validation</td><td>Bedrock Data Automation</td><td>Validates artifact content.</td></tr>
         <tr><td>Dead Letter Queue</td><td>SQS</td><td>Catches failed events after retries exhausted.</td></tr>
+        <tr><td>Checklist Update</td><td>Integration Broker (PeopleSoft)</td><td>Updates student checklist item to "Returned" on validation failure. Basic auth, XML over REST.</td></tr>
+        <tr><td>Student Notification</td><td>Salesforce (SFDC via ServiceAuth)</td><td>Creates a closed CAR case on validation failure → triggers auto-response email to student.</td></tr>
+        <tr><td>Team Notification</td><td>Slack (Webhook + Block Kit)</td><td>Posts validation outcome to team channel. Fire-and-forget.</td></tr>
         <tr><td>Observability</td><td>CloudWatch + Datadog</td><td>Logs in CW, alerting/dashboards in Datadog → <code>#prd-eva</code></td></tr>
       </table>
     </section>
@@ -204,18 +207,47 @@ details > :not(summary) { padding: 0 1rem 1rem; }
         <div class="flow-label">event source mapping</div>
         <div class="flow-node compute">EVA Lambda<span class="tooltip">See steps below for internal orchestration detail</span></div>
         <div class="flow-arrow"></div>
-        <div class="flow-label">emit result</div>
-        <div class="flow-node aws">EEL<span class="tooltip">Downstream consumers filter by source field for scoped subscriptions</span></div>
+        <div class="flow-label">emit result (always)</div>
+        <div class="flow-node aws">EEL<span class="tooltip">Result event: form_id, document_type, source, isValidArtifact. Downstream consumers filter by source.</span></div>
+        <div class="flow-arrow"></div>
+        <div class="flow-label">on failure only</div>
+        <div class="flow-node external">Integration Broker<span class="tooltip">Update checklist item FPKGEX/FMM40 → action "R" (Returned). Basic auth, XML/REST.</span></div>
+        <div class="flow-arrow"></div>
+        <div class="flow-label">on failure only</div>
+        <div class="flow-node external">Salesforce (SFDC)<span class="tooltip">Create closed CAR case via ServiceAuth. Triggers auto-response email to student.</span></div>
+        <div class="flow-arrow"></div>
+        <div class="flow-label">always (fire-and-forget)</div>
+        <div class="flow-node external">Slack<span class="tooltip">Block Kit message via webhook URL. Pass/fail outcome + form_id. Non-blocking.</span></div>
       </div>
 
       <h3>EVA Lambda Orchestrator Steps in Detail</h3>
       <ol>
         <li><strong>Validate Input:</strong> Pydantic model via Powertools <code>event_parser</code>. Reject malformed immediately.</li>
-        <li><strong>Retrieval:</strong> <code>httpx</code> to <a href="https://developers.kualibuild.com/pull-push-attachments">Kuali GraphQL API</a> to retrieve form attachments (connect: 5s, read: 30s).</li>
+        <li><strong>Retrieval:</strong> <code>httpx</code> to <a href="https://developers.kualibuild.com/pull-push-attachments">Kuali GraphQL API</a> to retrieve form attachments (connect: 5s, read: 30s). Also extracts <code>emplid</code> and attempts to resolve <code>document_type</code> from the response metadata.</li>
         <li><strong>Staging:</strong> S3 put. Key: <code>{form_id}/{uuid}</code>.</li>
         <li><strong>Validation:</strong> BDA invocation with S3 URI.</li>
         <li><strong>Immediate Purge:</strong> S3 delete the <em>instant</em> the result is received — the artifact is PII and must not linger. The <a href="#resilience">1-day S3 lifecycle rule</a> is the backstop, not the primary mechanism.</li>
-        <li><strong>Emit Result:</strong> EEL event with <code>form_id</code>, <code>source</code>, <code>isValidArtifact</code> boolean. Scoped subscriptions via <code>source</code>.</li>
+        <li><strong>Emit Result:</strong> EEL event with <code>form_id</code>, <code>document_type</code>, <code>source</code>, <code>isValidArtifact</code> boolean. Scoped subscriptions via <code>source</code>. <em>Always fires (pass and fail).</em></li>
+        <li><strong>IB Checklist Update (failure only):</strong> On validation failure, call Integration Broker to return the checklist item. <code>get_checklists(emplid, "FPKGEX", "FMM40")</code> → resolve <code>seq3c</code> → <code>update_checklist_item(action="R")</code>. Must-succeed — failure raises and retries via SQS.</li>
+        <li><strong>SFDC Create Closed Case (failure only):</strong> On validation failure, look up SFDC contact via <code>get_contact_id(emplid)</code>, then create a closed CAR case. Triggers auto-response email to the student notifying them their document was returned. Must-succeed.</li>
+        <li><strong>Slack Notification (always):</strong> Post Block Kit message to webhook URL with validation outcome (pass/fail, form_id, document_type). Fire-and-forget — log warning on failure, do not block or retry. <em>Consider dialing back to failures-only in future.</em></li>
+      </ol>
+
+      <h3>Conditional Execution Matrix</h3>
+      <table>
+        <tr><th>Step</th><th>Pass</th><th>Fail</th><th>Failure Semantics</th></tr>
+        <tr><td>EEL emit</td><td>✓</td><td>✓</td><td>Must-succeed (raises → SQS retry)</td></tr>
+        <tr><td>IB checklist update</td><td>—</td><td>✓</td><td>Must-succeed (idempotent on retry)</td></tr>
+        <tr><td>SFDC closed case</td><td>—</td><td>✓</td><td>Must-succeed (ordering prevents duplicates)</td></tr>
+        <tr><td>Slack notification</td><td>✓</td><td>✓</td><td>Fire-and-forget (warning on failure)</td></tr>
+      </table>
+      <p style="font-size:0.82rem; color:var(--gray-3);"><strong>Ordering rationale:</strong> EEL → IB → SFDC → Slack. IB is idempotent on retry. SFDC executes <em>after</em> IB succeeds, so on retry (IB success → SFDC failure → SQS redelivery) IB re-executes harmlessly and SFDC only fires once. Slack is last and non-blocking.</p>
+
+      <h3>Document Type Resolution</h3>
+      <p>The <code>document_type</code> field identifies what artifact was validated (e.g., SSN card, driver's license). Resolution strategy:</p>
+      <ol>
+        <li><strong>Primary:</strong> Infer from the Kuali GraphQL API response during the retrieval step (field labels, attachment categories, or form metadata).</li>
+        <li><strong>Fallback:</strong> Static config mapping (<code>form_id → document_type</code>) if the GraphQL response does not carry usable metadata. Requires a deploy to add new form types.</li>
       </ol>
     </section>
 
@@ -351,6 +383,9 @@ def handler(event: FormSubmissionEvent, context: LambdaContext):
         <h3>Secrets</h3>
         <ul>
           <li>Kuali API keys in Secrets Manager (rotation support)</li>
+          <li>Integration Broker password in Secrets Manager (Basic auth)</li>
+          <li>ServiceAuth client secret in Secrets Manager (for SFDC token acquisition)</li>
+          <li>Slack webhook URL in Secrets Manager</li>
           <li>Validate at cold start — fail immediately if missing</li>
           <li>Cache in memory for warm invocations</li>
         </ul>
@@ -408,11 +443,15 @@ def handler(event: FormSubmissionEvent, context: LambdaContext):
       </table>
       <h3>Key Scenarios</h3>
       <ul>
-        <li>Valid event → validation → S3 purge confirmed</li>
+        <li>Valid event → validation passes → EEL emit + Slack only (no IB, no SFDC)</li>
+        <li>Valid event → validation fails → EEL emit → IB update → SFDC case → Slack</li>
         <li>Malformed event → Pydantic rejects</li>
         <li>Kuali timeout → stamina retries then raises</li>
         <li>BDA throttle → boto3 adaptive handles</li>
         <li>S3 delete fails → lifecycle guarantees purge</li>
+        <li>IB call fails → raises → SQS retry (SFDC/Slack never fire)</li>
+        <li>SFDC call fails → raises → SQS retry (IB is idempotent on re-execution)</li>
+        <li>Slack fails → warning logged, does not block or retry</li>
       </ul>
     </section>
 
@@ -437,6 +476,19 @@ def handler(event: FormSubmissionEvent, context: LambdaContext):
         <li><strong>httpx + stamina</strong> — <a href="https://www.python-httpx.org/">httpx docs</a>, <a href="https://stamina.hynek.me/">stamina docs</a></li>
         <li><strong>Bedrock Data Automation</strong> — <a href="https://docs.aws.amazon.com/bedrock/latest/userguide/bda.html">AWS BDA docs</a></li>
       </ul>
+
+      <h3><a href="https://github.com/ASU/sisfa-peoplesoft-financial-aid-module-event-listeners" style="color: var(--asu-maroon); font-weight: 700;">sisfa-peoplesoft-financial-aid-module-event-listeners</a></h3>
+      <table>
+        <tr><th>Pattern</th><th>Where to look</th></tr>
+        <tr><td>Integration Broker client (checklist API)</td><td><a href="https://github.com/ASU/sisfa-peoplesoft-financial-aid-module-event-listeners/tree/main/lambda_functions/idv_update/src/idv_update/integration_broker"><code>integration_broker/</code></a></td></tr>
+        <tr><td>Slack webhook + Block Kit notifications</td><td><a href="https://github.com/ASU/sisfa-peoplesoft-financial-aid-module-event-listeners/tree/main/lambda_functions/idv_update/src/idv_update/slack_notifier"><code>slack_notifier/</code></a></td></tr>
+      </table>
+
+      <h3><a href="https://github.com/ASU/wflow-financial-aid-sap-forms-automation" style="color: var(--asu-maroon); font-weight: 700;">wflow-financial-aid-sap-forms-automation</a></h3>
+      <table>
+        <tr><th>Pattern</th><th>Where to look</th></tr>
+        <tr><td>Salesforce client (ServiceAuth + create closed case)</td><td><a href="https://github.com/ASU/wflow-financial-aid-sap-forms-automation/tree/main/lambdas/functions/decision-dispatcher/src/decision_dispatcher/salesforce"><code>salesforce/</code></a></td></tr>
+      </table>
     </section>
 
     <section id="next">
@@ -452,7 +504,7 @@ def handler(event: FormSubmissionEvent, context: LambdaContext):
       </ol>
     </section>
 
-    <div class="footer">Generated 2026-06-05 &middot; EVA (Artifact Validation Engine) &middot; MVP Architecture Handoff<br>Created by Kasey Kautenburger and Kiro</div>
+    <div class="footer">Generated 2026-06-16 &middot; EVA (Artifact Validation Engine) &middot; MVP Architecture Handoff<br>Created by Kasey Kautenburger and Kiro</div>
   </main>
 </div>
 </body>
